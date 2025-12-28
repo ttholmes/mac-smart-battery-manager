@@ -12,6 +12,13 @@ import json
 import shutil
 import sys
 from datetime import datetime, timedelta
+import urllib.request
+
+# ==============================================================================
+# METADADOS E ATUALIZAÇÃO
+# ==============================================================================
+VERSION = "1.0"
+GITHUB_RAW_URL = "https://raw.githubusercontent.com/ttholmes/mac-smart-battery-manager/main/src/battery_manager.py"
 
 # ==============================================================================
 # CONFIGURAÇÕES TÉCNICAS
@@ -91,6 +98,42 @@ def execute_battery_cmd(action, value=None):
     try: subprocess.run(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except: pass
 
+    def check_for_updates():
+    """
+    Verifica se há uma nova versão no GitHub.
+    Lê o arquivo remoto, busca a string VERSION e compara.
+    """
+    try:
+        log("🔍 Verificando atualizações...")
+        # Timeout curto para não travar o boot do script caso esteja sem internet
+        with urllib.request.urlopen(GITHUB_RAW_URL, timeout=5) as response:
+            remote_code = response.read().decode('utf-8')
+            
+            # Busca a versão no código remoto usando Regex
+            match = re.search(r'VERSION\s*=\s*"([\d\.]+)"', remote_code)
+            if match:
+                remote_version = match.group(1)
+                if remote_version > VERSION:
+                    log(f"✨ Nova versão disponível: v{remote_version} (Atual: v{VERSION})")
+                    send_notification(
+                        "Atualização Disponível!", 
+                        f"Nova versão v{remote_version} do Smart Battery. Rode 'git pull' para atualizar."
+                    )
+                else:
+                    log("✅ Script atualizado.")
+    except Exception as e:
+        log(f"⚠️ Não foi possível verificar atualizações: {e}")
+
+def send_notification(title, message):
+    """Envia notificação nativa do macOS"""
+    try:
+        clean_msg = message.replace('"', '\\"')
+        clean_title = title.replace('"', '\\"')
+        
+        script = f'display notification "{clean_msg}" with title "{clean_title}" sound name "Glass"'
+        subprocess.run(["osascript", "-e", script])
+    except: pass
+
 # ==============================================================================
 # LÓGICA PRINCIPAL 
 # ==============================================================================
@@ -100,7 +143,8 @@ def main():
         print("❌ ERRO CRÍTICO: 'battery' CLI não encontrado.")
         sys.exit(1)
 
-    log(f"🔋 Smart Battery v3.0 Iniciado.")
+    log(f"🔋 Smart Battery v{VERSION} Iniciado.")
+    check_for_updates()
     log(f"   Cooldown de Sailing: {SAILING_COOLDOWN_HOURS} horas")
     
     while True:
